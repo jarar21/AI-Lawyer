@@ -4,11 +4,13 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 import pickle
 import streamlit as st
+from streamlit_javascript import st_javascript
 from openai import OpenAI
 from dotenv import load_dotenv
 import sqlite3
 
-st.set_page_config(page_title="AI Law Site" ,layout="wide")
+st.set_page_config(page_title="AI Law Site" ,layout="wide", initial_sidebar_state=st.session_state.get('sidebar_state', 'expanded'))
+st.session_state.sidebar_state = 'expanded'
 
 # Load environment variables from .env file
 load_dotenv()
@@ -116,7 +118,7 @@ def search_pdfs(query, max_length=2048, similarity_threshold=0.3):
     # Return the heading, truncated content, page number, and PDF file
     return heading, relevant_text[:max_length], page_number, pdf_file
 
-YOUR_API_KEY = os.getenv('YOUR_API_KEY')
+YOUR_API_KEY = st.secrets["OPENAI_API_KEY"]
 
 client = OpenAI(api_key=YOUR_API_KEY, base_url="https://api.perplexity.ai")
 
@@ -184,8 +186,10 @@ if "messages" not in st.session_state:
 
 with st.sidebar:
 
-    if st.button("New Chat", help="Fragment rerun"):
+    if st.button("New Chat"):
+        st.session_state.sidebar_state = 'collapsed'
         st.session_state.messages = []
+        st.rerun()
 
     if st.button("Delete Chat History"):
         if st.checkbox("Are you sure you want to delete all chat history?"):
@@ -211,6 +215,8 @@ with st.sidebar:
                     {"role": "user", "content": chat[1]},
                     {"role": "assistant", "content": chat[2]}
                 ]
+                st.session_state.sidebar_state = 'collapsed'
+                st.rerun()
         with col2:
             if st.button("⋮", key=f"kebab_{i}"):
                 st.session_state[f"show_delete_{i}"] = not st.session_state.get(f"show_delete_{i}", False)

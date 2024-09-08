@@ -8,6 +8,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import sqlite3
 
+st.set_page_config(page_title="AI Law Site" ,layout="wide")
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -114,7 +116,7 @@ def search_pdfs(query, max_length=2048, similarity_threshold=0.3):
     # Return the heading, truncated content, page number, and PDF file
     return heading, relevant_text[:max_length], page_number, pdf_file
 
-YOUR_API_KEY = st.secrets["OPENAI_API_KEY"]
+YOUR_API_KEY = os.getenv('YOUR_API_KEY')
 
 client = OpenAI(api_key=YOUR_API_KEY, base_url="https://api.perplexity.ai")
 
@@ -154,10 +156,7 @@ def generate_response(query):
         # If a PDF file is found, provide details, otherwise avoid using basename on None
         pdf_info = f"**Source PDF:** {os.path.basename(pdf_file)}" if pdf_file else "**Source PDF:** Not available"
         output = (
-            f"**Heading:** {heading}\n\n"
             f"**Content:** {response_content}\n\n"
-            f"**Page Number:** {page_number}\n"
-            f"{pdf_info}"
         )
     
     # Save the query and response to the database
@@ -177,22 +176,30 @@ def load_chat_history():
     return cursor.fetchall()
 
 # Streamlit interface
-st.title('LAIER LAW SITE')
+st.title('AI Law Site')
 
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 with st.sidebar:
-    if st.button("Delete Chat History"):
+
+    if st.button("New Chat", help="Fragment rerun"):
         st.session_state.messages = []
-        cursor.execute("DELETE FROM chat_history")
-        conn.commit()
-        st.query_params
+
+    if st.button("Delete Chat History"):
+        if st.checkbox("Are you sure you want to delete all chat history?"):
+            st.session_state.messages = []
+            cursor.execute("DELETE FROM chat_history")
+            conn.commit()
+            st.success("Chat history deleted successfully!")
+        else:
+            st.warning("Please confirm deletion by checking the box.")
 
     # Load old chats from database
     old_chats = load_chat_history()
-
+    if 'deletion_occurred' not in st.session_state:
+        st.session_state.deletion_occurred = False
     # Display old chats in a fancy box
     st.markdown("<div style='background-color: #202222; padding: 10px; border-radius: 5px;'>", unsafe_allow_html=True)
     st.markdown("<h4 style='color: white;'>Old Chats</h4>", unsafe_allow_html=True)
@@ -212,9 +219,11 @@ with st.sidebar:
             if st.button("🗑️ Delete", key=f"delete_chat_{i}", type="primary"):
                 cursor.execute('DELETE FROM chat_history WHERE id = ?', (chat[0],))
                 conn.commit()
-                st.query_params
-
-    st.markdown("</div>", unsafe_allow_html=True)
+                st.session_state.deletion_occurred = True
+                st.success("Chat deleted successfully!")
+        if st.session_state.deletion_occurred:
+            st.session_state.deletion_occurred = False
+            st.rerun()
 
 # Display chat messages from history
 for message in st.session_state.messages:
@@ -229,9 +238,10 @@ if prompt := st.chat_input("Type your message here..."):
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Generate a response
-    response = generate_response(prompt)
-    with st.chat_message("assistant"):
-        st.markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    st.query_params
+    with st.spinner("Thinking..."):
+        # Generate a response
+        response = generate_response(prompt)
+        with st.chat_message("assistant"):
+            st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        

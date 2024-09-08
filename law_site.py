@@ -4,7 +4,6 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 import pickle
 import streamlit as st
-from streamlit_javascript import st_javascript
 from openai import OpenAI
 from dotenv import load_dotenv
 import sqlite3

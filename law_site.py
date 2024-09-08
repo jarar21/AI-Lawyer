@@ -205,7 +205,7 @@ with st.sidebar:
         st.session_state.deletion_occurred = False
     # Display old chats in a fancy box
     st.markdown("<div style='background-color: #202222; padding: 10px; border-radius: 5px;'>", unsafe_allow_html=True)
-    st.markdown("<h4 style='color: white;'>Old Chats</h4>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: white;'>Pevious Chats</h2>", unsafe_allow_html=True)
     for i, chat in enumerate(old_chats):
         col1, col2 = st.columns([0.9, 0.1])
         with col1:

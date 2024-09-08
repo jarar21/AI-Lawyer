@@ -179,6 +179,25 @@ def load_chat_history():
 # Streamlit interface
 st.title('AI Law Site')
 
+st.markdown(
+    """
+    <style>
+        /* Target elements with data-testid="column" */
+        div[data-testid="column"]:nth-child(1) {
+            width: calc(80% - 1rem) !important;
+            flex: 1 1 calc(80% - 1rem) !important;
+            min-width: calc(80% - 1rem) !important;
+        }
+        div[data-testid="column"]:nth-child(2) {
+            width: calc(20% - 1rem) !important;
+            flex: 1 1 calc(20% - 1rem) !important;
+            min-width: calc(20% - 1rem) !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -207,7 +226,7 @@ with st.sidebar:
     st.markdown("<div style='background-color: #202222; padding: 10px; border-radius: 5px;'>", unsafe_allow_html=True)
     st.markdown("<h2 style='color: white;'>Pevious Chats</h2>", unsafe_allow_html=True)
     for i, chat in enumerate(old_chats):
-        col1, col2 = st.columns([0.9, 0.1])
+        col1, col2 = st.columns([4, 1])
         with col1:
             if st.button(chat[1][:20] + " ...", key=f"old_chat_{i}", use_container_width=True):
                 st.session_state.messages = [

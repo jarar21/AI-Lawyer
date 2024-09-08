@@ -209,7 +209,7 @@ with st.sidebar:
     for i, chat in enumerate(old_chats):
         col1, col2 = st.columns([0.9, 0.1])
         with col1:
-            if st.button(chat[1][:24] + " ...", key=f"old_chat_{i}", use_container_width=True):
+            if st.button(chat[1][:20] + " ...", key=f"old_chat_{i}", use_container_width=True):
                 st.session_state.messages = [
                     {"role": "user", "content": chat[1]},
                     {"role": "assistant", "content": chat[2]}

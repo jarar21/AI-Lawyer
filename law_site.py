@@ -5,31 +5,63 @@ import numpy as np
 import pickle
 import streamlit as st
 from openai import OpenAI
+from dotenv import load_dotenv
+import sqlite3
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Database setup
+conn = sqlite3.connect('chat_history.db', check_same_thread=False)
+cursor = conn.cursor()
+
+# Create the chat_history table if it doesn't exist
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS chat_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        query TEXT NOT NULL,
+        response TEXT NOT NULL
+    )
+''')
+conn.commit()
+
+# Directory containing PDF files
+text_chunks_file = 'text_chunks.pkl'
+
+@st.cache_data
+def load_or_extract_text_chunks(pdf_directory):
+    if os.path.exists(text_chunks_file):
+        with open(text_chunks_file, 'rb') as f:
+            text_chunks = pickle.load(f)
+        print("Text chunks loaded from file.")
+    else:
+        pdf_files = [os.path.join(pdf_directory, file) for file in os.listdir(pdf_directory) if file.endswith('.pdf')]
+        text_chunks = []
+        for pdf_file in pdf_files:
+            with open(pdf_file, 'rb') as file:
+                reader = PyPDF2.PdfReader(file)
+                for page_number, page in enumerate(reader.pages, start=1):
+                    text = page.extract_text()
+                    if text:
+                        paragraphs = text.split('\n\n') # Split by paragraphs
+                        for paragraph in paragraphs:
+                            text_chunks.append((paragraph, page_number, pdf_file))
+        with open(text_chunks_file, 'wb') as f:
+            pickle.dump(text_chunks, f)
+        print("Text chunks extracted and saved to file.")
+    return text_chunks
 
 # Directory containing PDF files
 pdf_directory = 'data'  # Update this path to where your PDFs are stored
 
-# List all PDF files in the directory
-pdf_files = [os.path.join(pdf_directory, file) for file in os.listdir(pdf_directory) if file.endswith('.pdf')]
-
-# Extract text from all PDFs
-text_chunks = []
-for pdf_file in pdf_files:
-    with open(pdf_file, 'rb') as file:
-        reader = PyPDF2.PdfReader(file)
-        for page_number, page in enumerate(reader.pages, start=1):
-            text = page.extract_text()
-            if text:
-                paragraphs = text.split('\n\n')  # Split by paragraphs
-                for paragraph in paragraphs:
-                    text_chunks.append((paragraph, page_number, pdf_file))
+# Load or extract text chunks
+text_chunks = load_or_extract_text_chunks(pdf_directory)
 
 # Check if text_chunks is empty
 if not text_chunks:
     st.error("No text extracted from PDF files. Please check the PDF files and directory path.")
     st.stop()
 
-# Initialize the sentence transformer model
 # Initialize the sentence transformer model
 embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
@@ -94,16 +126,16 @@ def generate_response(query):
         # If no relevant content is found, provide a general response
         response_content = "Query not found in the PDFs. Here's a general response: " \
                            "This topic might not be covered in the provided documents. Please consult additional resources."
-        output = response_content
+        # No need to provide PDF or page information since no relevant text was found
+        output = (
+            f"**Content:** {response_content}\n\n"
+        )
     else:
         # Define the messages for the conversation
         messages = [
             {
                 "role": "system",
-                "content": (
-                    "You are an artificial intelligence assistant and you need to "
-                    "engage in a helpful, detailed, polite conversation with a user."
-                ),
+                "content": "You are an AI lawyer specializing in Pakistani laws. Provide accurate and detailed legal information."
             },
             {
                 "role": "user",
@@ -117,58 +149,32 @@ def generate_response(query):
             messages=messages,
         )
 
-        # Access the content correctly
         response_content = response.choices[0].message.content
-        save_chat_history(query, response_content)  # Call with two arguments
 
-        # Format the output with citations
+        # If a PDF file is found, provide details, otherwise avoid using basename on None
+        pdf_info = f"**Source PDF:** {os.path.basename(pdf_file)}" if pdf_file else "**Source PDF:** Not available"
         output = (
             f"**Heading:** {heading}\n\n"
             f"**Content:** {response_content}\n\n"
             f"**Page Number:** {page_number}\n"
-            f"**Source PDF:** {os.path.basename(pdf_file)}"
+            f"{pdf_info}"
         )
-        
+    
+    # Save the query and response to the database
+    save_chat_history(query, response_content)
+
     return output
 
-def save_chat_history(query, response_content):
-    with open("responses.txt", "a") as file:  # Use 'a' to append to the file
-        file.write(f"Query: {query}\n")
-        file.write(f"Response:\n{response_content}\n")
-        file.write("="*50 + "\n")
+def save_chat_history(query, response):
+    cursor.execute('''
+        INSERT INTO chat_history (query, response)
+        VALUES (?, ?)
+    ''', (query, response))
+    conn.commit()
 
 def load_chat_history():
-    chat_history = []
-    if os.path.exists("responses.txt"):
-        with open("responses.txt", "r") as file:
-            lines = file.readlines()
-            current_chat = {"query": "", "response": ""}
-            response_lines = []
-            for line in lines:
-                line = line.strip()  # Remove any leading/trailing whitespace
-                if line.startswith("Query:"):
-                    # If there's an existing query, append it to the history
-                    if current_chat["query"]:
-                        current_chat["response"] = "\n".join(response_lines)
-                        chat_history.append(current_chat)
-                    # Start a new chat entry
-                    current_chat = {"query": line.replace("Query:", "").strip(), "response": ""}
-                    response_lines = []
-                elif line.startswith("="*50):
-                    # End of a chat entry, append it to the history
-                    if current_chat["query"]:
-                        current_chat["response"] = "\n".join(response_lines)
-                        chat_history.append(current_chat)
-                    current_chat = {"query": "", "response": ""}
-                    response_lines = []
-                else:
-                    # Collect response lines
-                    response_lines.append(line)
-            # Append the last entry if it exists
-            if current_chat["query"]:
-                current_chat["response"] = "\n".join(response_lines)
-                chat_history.append(current_chat)
-    return chat_history
+    cursor.execute('SELECT id, query, response FROM chat_history')
+    return cursor.fetchall()
 
 # Streamlit interface
 st.title('LAIER LAW SITE')
@@ -180,20 +186,35 @@ if "messages" not in st.session_state:
 with st.sidebar:
     if st.button("Delete Chat History"):
         st.session_state.messages = []
-        save_chat_history([])
-# Load old chats
-old_chats = load_chat_history()
+        cursor.execute("DELETE FROM chat_history")
+        conn.commit()
+        st.query_params
 
-# Display old chats in a fancy box
-st.sidebar.markdown("<div style='background-color: #202222; padding: 10px; border-radius: 5px;'>", unsafe_allow_html=True)
-st.sidebar.markdown("<h4 style='color: white;'>Old Chats</h4>", unsafe_allow_html=True)
-for i, chat in enumerate(old_chats):
-    if st.sidebar.button(chat["query"], key=f"old_chat_{i}"):
-        st.session_state.messages = [
-            {"role": "user", "content": chat["query"]},
-            {"role": "assistant", "content": chat["response"]}
-        ]
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
+    # Load old chats from database
+    old_chats = load_chat_history()
+
+    # Display old chats in a fancy box
+    st.markdown("<div style='background-color: #202222; padding: 10px; border-radius: 5px;'>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: white;'>Old Chats</h4>", unsafe_allow_html=True)
+    for i, chat in enumerate(old_chats):
+        col1, col2 = st.columns([0.9, 0.1])
+        with col1:
+            if st.button(chat[1][:24] + " ...", key=f"old_chat_{i}", use_container_width=True):
+                st.session_state.messages = [
+                    {"role": "user", "content": chat[1]},
+                    {"role": "assistant", "content": chat[2]}
+                ]
+        with col2:
+            if st.button("⋮", key=f"kebab_{i}"):
+                st.session_state[f"show_delete_{i}"] = not st.session_state.get(f"show_delete_{i}", False)
+        
+        if st.session_state.get(f"show_delete_{i}", False):
+            if st.button("🗑️ Delete", key=f"delete_chat_{i}", type="primary"):
+                cursor.execute('DELETE FROM chat_history WHERE id = ?', (chat[0],))
+                conn.commit()
+                st.query_params
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # Display chat messages from history
 for message in st.session_state.messages:
@@ -213,3 +234,4 @@ if prompt := st.chat_input("Type your message here..."):
     with st.chat_message("assistant"):
         st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
+    st.query_params

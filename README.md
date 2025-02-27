@@ -9,9 +9,7 @@ AI Lawyer is an AI-powered legal assistant designed to help users understand leg
 - **AI-Powered Assistance** – Ask legal questions and receive AI-driven responses.
 
 ## Demo
-
-![AI Lawyer Demo](![2025-02-27 22_01_47-](https://github.com/user-attachments/assets/0eb28ec8-3014-48f2-925f-0e3694bd5176))  
-*Screenshot of the AI Lawyer interface*
+![2025-02-27 22_01_47-](https://github.com/user-attachments/assets/cd2e4ea4-148e-4f44-ba36-ddcf39702a43)
 
 ### Try the Demo  
 🔗 [Click here to try AI Lawyer](https://ailawyer.streamlit.app/)
